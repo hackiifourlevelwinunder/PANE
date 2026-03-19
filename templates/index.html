@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>ULTRA AI PANEL</title>
+<style>
+body{background:black;color:white;font-family:Arial;text-align:center;}
+.container{display:flex;}
+.box{width:50%;border:1px solid white;padding:10px;}
+</style>
+</head>
+<body>
+
+<h2 id="clock"></h2>
+<h3 id="prediction"></h3>
+<h3 id="confidence"></h3>
+
+<div class="container">
+<div class="box">
+<h3>AI HISTORY</h3>
+<div id="ai"></div>
+</div>
+
+<div class="box">
+<h3>REAL HISTORY</h3>
+<div id="real"></div>
+</div>
+</div>
+
+<script>
+setInterval(()=>{
+document.getElementById("clock").innerText=new Date().toLocaleTimeString();
+},1000);
+
+async function load(){
+let r=await fetch('/data');
+let d=await r.json();
+
+document.getElementById("prediction").innerText=d.current;
+document.getElementById("confidence").innerText="CONFIDENCE: "+d.confidence+"%";
+
+document.getElementById("ai").innerHTML=d.prediction.join("<br>");
+document.getElementById("real").innerHTML=d.real.join("<br>");
+}
+setInterval(load,1000);
+</script>
+
+</body>
+</html>
