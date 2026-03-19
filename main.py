@@ -16,104 +16,117 @@ last_period=0
 current_prediction="LOADING..."
 confidence=0
 
-# ---------------- API FIX ----------------
+# ---------------- API STRONG FIX ----------------
 def get_latest():
-    try:
-        r = requests.get(API_URL, timeout=5, headers={
-            "User-Agent":"Mozilla/5.0"
-        })
-        data = r.json()
+    for _ in range(3):  # retry
+        try:
+            r=requests.get(API_URL,timeout=5)
+            data=r.json()
 
-        items = data.get("data", {}).get("list", [])
-        if not items:
-            return None
+            if "data" not in data:
+                continue
 
-        item = items[0]
+            lst=data["data"].get("list",[])
+            if not lst:
+                continue
 
-        period = int(item["issueNumber"])
-        number = int(item["number"])
+            item=lst[0]
 
-        size = "BIG" if number >= 5 else "SMALL"
+            period=int(item["issueNumber"])
+            number=int(item["number"])
 
-        if number == 0:
-            color = "RED/VIOLET"
-        elif number == 5:
-            color = "GREEN/VIOLET"
-        elif number % 2 == 0:
-            color = "RED"
-        else:
-            color = "GREEN"
+            size="BIG" if number>=5 else "SMALL"
 
-        return period,number,size,color
+            if number==0:
+                color="RED/VIOLET"
+            elif number==5:
+                color="GREEN/VIOLET"
+            elif number%2==0:
+                color="RED"
+            else:
+                color="GREEN"
 
-    except Exception as e:
-        print("API ERROR:", e)
-        return None
+            return period,number,size,color
 
-# ---------------- AI ENGINE ----------------
+        except:
+            time.sleep(1)
+
+    return None
+
+# ---------------- AI ----------------
 def ai_predict():
-    if len(real_history)<5:
-        return random.choice(["BIG","SMALL","RED","GREEN"]),50
+    if len(real_history)<3:
+        return random.choice(["BIG","SMALL","RED","GREEN"]),40
 
     score={"BIG":0,"SMALL":0,"RED":0,"GREEN":0}
 
     last=list(real_history)[-10:]
 
     for i,r in enumerate(last):
-        score[r["size"]]+=i+1
+        score[r["size"]]+=2+i
 
         if "RED" in r["color"]:
             score["RED"]+=1
         if "GREEN" in r["color"]:
             score["GREEN"]+=1
 
-    # streak
+    # repeat detect
+    if len(last)>=2 and last[-1]["size"]==last[-2]["size"]:
+        score[last[-1]["size"]]+=3
+
+    # color streak
     if len(last)>=3:
-        if last[-1]["size"]==last[-2]["size"]==last[-3]["size"]:
-            score[last[-1]["size"]]+=5
+        if "RED" in last[-1]["color"] and "RED" in last[-2]["color"]:
+            score["GREEN"]+=3
+
+        if "GREEN" in last[-1]["color"] and "GREEN" in last[-2]["color"]:
+            score["RED"]+=3
 
     best=max(score,key=score.get)
-    conf=min(90,50+score[best])
+    conf=min(95,50+score[best])
 
     return best,conf
 
-# ---------------- LOOP FIX ----------------
+# ---------------- LOOP HARD FIX ----------------
 def loop():
     global last_period,current_prediction,confidence
+
+    print("STARTED LOOP...")
 
     while True:
         data=get_latest()
 
-        if not data:
+        if data is None:
+            print("API FAIL")
             time.sleep(2)
             continue
 
         period,number,size,color=data
 
-        if period==last_period:
-            time.sleep(1)
-            continue
+        print("NEW DATA:",period,number)
 
-        real_history.append({
-            "period":period,
-            "number":number,
-            "size":size,
-            "color":color
-        })
+        if period!=last_period:
 
-        pred,conf=ai_predict()
+            real_history.append({
+                "period":period,
+                "number":number,
+                "size":size,
+                "color":color
+            })
 
-        current_prediction=f"{period+1} → {pred}"
-        confidence=conf
+            pred,conf=ai_predict()
 
-        prediction_history.appendleft(current_prediction)
+            current_prediction=f"{period+1} → {pred}"
+            confidence=conf
 
-        last_period=period
+            prediction_history.appendleft(current_prediction)
 
-        time.sleep(2)
+            last_period=period
 
-# ---------------- START THREAD ----------------
-threading.Thread(target=loop, daemon=True).start()
+        time.sleep(1)
+
+# ---------------- START ----------------
+threading.Thread(target=loop,daemon=True).start()
 
 # ---------------- ROUTES ----------------
 @app.route('/')
